@@ -69,11 +69,17 @@ def main() -> None:
         finally:
             browser.close()
 
-    # 鮮度フィルタ ＋ 重複チェックで新規記事を抽出
-    new_articles = [
-        a for a in articles
-        if a["url"] not in processed_urls and _is_fresh(a["published"])
-    ]
+    # 鮮度フィルタ ＋ 重複チェックで新規記事を抽出。
+    # 実行内重複も除外（DeepMindのblog.googleクロス投稿がGoogle AIと衝突しうる）。
+    new_articles: list[dict] = []
+    seen_urls: set[str] = set()
+    for a in articles:
+        if a["url"] in processed_urls or a["url"] in seen_urls:
+            continue
+        if not _is_fresh(a["published"]):
+            continue
+        seen_urls.add(a["url"])
+        new_articles.append(a)
     logger.info("新規候補: %d件 / 全%d件", len(new_articles), len(articles))
 
     processed_count = 0

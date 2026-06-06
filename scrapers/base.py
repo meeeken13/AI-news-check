@@ -42,7 +42,9 @@ class BaseScraper:
         try:
             self.page.goto(url, wait_until="domcontentloaded", timeout=30000)
             if wait_selector:
-                self.page.wait_for_selector(wait_selector, timeout=15000)
+                # state="attached": DOMに存在すればよい（可視性は問わない）。
+                # 隠れナビ等に要素があるサイト(DeepMind)でも待ちが成立する。
+                self.page.wait_for_selector(wait_selector, state="attached", timeout=15000)
             return True
         except PlaywrightTimeoutError:
             logger.warning("[%s] タイムアウト: %s (selector=%s)", self.company, url, wait_selector)

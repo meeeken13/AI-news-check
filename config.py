@@ -13,7 +13,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "")
 
 # --- 動作パラメータ ---
-MAX_PER_RUN = 5          # 1回の実行でClaude生成する最大記事数
+MAX_PER_RUN = 10         # 1回の実行でClaude生成する最大記事数
 FRESHNESS_HOURS = 48     # 公開からこの時間以内の記事のみ対象
 REQUEST_DELAY = 1.5      # サイトへのアクセス間隔（秒）
 GEN_DELAY = 3.0          # Claude生成ごとのスリープ（秒, API負荷対策）
@@ -40,5 +40,5 @@ SITES = [
     {"company": "Anthropic",  "url": "https://www.anthropic.com/news",              "module": "anthropic", "klass": "AnthropicNewsScraper"},
     {"company": "Anthropic",  "url": "https://www.anthropic.com/engineering",       "module": "anthropic", "klass": "AnthropicEngineeringScraper"},
     {"company": "OpenAI",     "url": "https://openai.com/news/",                    "module": "openai",    "klass": "OpenAIScraper"},
-    {"company": "DeepMind",   "url": "https://deepmind.google/discover/blog/",      "module": "deepmind",  "klass": "DeepMindScraper"},
+    {"company": "DeepMind",   "url": "https://deepmind.google/blog/",               "module": "deepmind",  "klass": "DeepMindScraper"},
 ]

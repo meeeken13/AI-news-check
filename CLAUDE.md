@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 実装済み。`config.py` / `claude_client.py` / `sheets_client.py` / `main.py` と `scrapers/` 一式、`.github/workflows/scrape.yml` が存在する。元仕様は `ai-news-scraper-spec.md`、開発手順は `DEVELOPMENT.md`、進捗と既知の問題は `CHECKLIST.md` を参照。
 
-**現状（2026-06 時点）**: スクレイピング層は6サイト中5サイトが実サイトで動作確認済み。**DeepMind は未解決**（`/discover/blog/` がJSルーティングのSPAで記事リンクをDOMに出さず0件）。Claude生成・Sheets書込・E2Eは実認証情報が必要なためローカル未検証。詳細は `CHECKLIST.md` の「既知の問題」。
+**現状（2026-06 時点）**: スクレイピング層は**6サイト全て実サイトで動作確認済み**（計約53件）。Claude生成・Sheets書込・E2EもGitHub Actionsで実行成功済み。`MAX_PER_RUN=10`。
+
+DeepMind の注意点: `/discover/blog/` は `/blog/` にリダイレクトするSPAで、記事リンクは①ネイティブ `deepmind.google/blog/<slug>` と②クロス投稿 `blog.google/...` が混在する。記事リンクが隠れナビにも存在するため `goto` の待ちは `state="attached"`（可視性を問わない）にしている — ここを `"visible"` に戻すと0件になる。blog.google クロス投稿は Google AI スクレイパーと衝突しうるため、`main.py` で実行内URL重複も除外している。
 
 ## このシステムの目的
 
