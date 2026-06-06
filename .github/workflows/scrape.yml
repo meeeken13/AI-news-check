@@ -2,7 +2,10 @@ name: scrape
 
 on:
   schedule:
-    - cron: "0 * * * *"   # 毎時0分（UTC）
+    # 毎時23分（UTC）。正時(0分)は全世界のcronが集中し遅延/スキップしやすい
+    # ため、混雑しない分にずらしている。GitHubのscheduleはベストエフォートで
+    # 数分の遅延は正常。
+    - cron: "23 * * * *"
   workflow_dispatch: {}    # 手動実行
 
 jobs:
