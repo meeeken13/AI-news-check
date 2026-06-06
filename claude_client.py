@@ -75,4 +75,17 @@ def generate_note_article(article: dict) -> dict:
     raw = message.content[0].text.strip()
 
     data = _parse_json(raw)
-    return {"title": data["title"], "body": data["body"]}
+    body = _append_source(data["body"], article)
+    return {"title": data["title"], "body": body}
+
+
+def _append_source(body: str, article: dict) -> str:
+    """note本文の末尾に公式記事の出典リンクを付与する。
+
+    URLはモデルに書かせず元データをそのまま使う（改変・切れ防止）。
+    既に同じURLが本文に含まれていれば二重に足さない。
+    """
+    url = article["url"]
+    if url in body:
+        return body
+    return f"{body.rstrip()}\n\n---\n📖 元記事（{article['company']}公式）\n{url}"
