@@ -1,0 +1,21 @@
+# 認証情報（絶対にコミットしない）
+.env
+service_account.json
+*service-account*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Playwright
+playwright-report/
+test-results/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
