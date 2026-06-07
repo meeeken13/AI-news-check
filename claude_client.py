@@ -31,6 +31,33 @@ AI企業の公式発表をもとに、note向けの日本語記事を書きま�
 必ず次のJSONのみを出力する。前後に説明文やコードブロック記号を付けない。
 {"title": "記事タイトル", "body": "リード文から始まる記事本文全体"}"""
 
+# 詳細解説版（速報より踏み込んだ中ボリュームの記事）
+DETAIL_SYSTEM_PROMPT = """あなたはAI・テクノロジー分野の専門ライター兼ブロガーです。
+AI企業の公式発表をもとに、note向けの「詳しい解説記事」を日本語で書きます。
+これは速報ではなく、背景・技術的な仕組み・意義まで踏み込んだ読み物です。
+
+# 方針
+- 本文は1500〜2500字程度。読み応えのある解説にする。
+- 公式発表の事実を正確に伝えつつ、なぜ重要か・どういう文脈かを丁寧に補足する。
+- 技術的な内容は具体的なたとえや身近な例で噛み砕く。専門用語は短く補足。
+- 公式文書の丸写しはしない。自分の言葉で再構成する。
+- 書き手の視点・考察を2〜3箇所、自然に差し込む（断言しすぎない）。
+- 英語の記事は必ず日本語に翻訳して記事化する。
+
+# 構成（本文 body はこの順、見出しは ## を使う）
+1. タイトル: 40字以内（速報より説明的でよい）
+2. リード文（2〜3文）
+3. ## 背景：何がこれまでの状況だったか
+4. ## 何が発表されたのか（詳細）
+5. ## 技術的なポイント／仕組み
+6. ## これが持つ意味・影響
+7. ## 読んで思ったこと（書き手の考察）
+8. ハッシュタグ5つ（#で始める）
+
+# 出力形式
+必ず次のJSONのみを出力する。前後に説明文やコードブロック記号を付けない。
+{"title": "記事タイトル", "body": "リード文から始まる記事本文全体"}"""
+
 
 def _is_english(text: str) -> bool:
     """タイトルがASCIIのみなら英語と判定（GAS版と同じロジック）。"""
@@ -48,11 +75,8 @@ def _parse_json(raw: str) -> dict:
         return json.loads(match.group(0))
 
 
-def generate_note_article(article: dict) -> dict:
-    """記事メタ情報から note 記事を生成し ``{"title", "body"}`` を返す。
-
-    article: ``{"title", "url", "published", "company"}``
-    """
+def _generate(article: dict, system_prompt: str, instruction: str) -> dict:
+    """指定のシステムプロンプトで記事を生成し ``{"title", "body"}`` を返す。"""
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
 
     lang_note = ""
@@ -60,7 +84,7 @@ def generate_note_article(article: dict) -> dict:
         lang_note = "\nこの記事は英語です。必ず日本語に翻訳して記事化してください。"
 
     user_prompt = (
-        f"以下のAI公式ブログ記事をもとに、note記事を書いてください。{lang_note}\n\n"
+        f"{instruction}{lang_note}\n\n"
         f"企業: {article['company']}\n"
         f"元タイトル: {article['title']}\n"
         f"元URL: {article['url']}"
@@ -69,14 +93,34 @@ def generate_note_article(article: dict) -> dict:
     message = client.messages.create(
         model=CLAUDE_MODEL,
         max_tokens=4096,
-        system=SYSTEM_PROMPT,
+        system=system_prompt,
         messages=[{"role": "user", "content": user_prompt}],
     )
     raw = message.content[0].text.strip()
-
     data = _parse_json(raw)
-    body = _append_source(data["body"], article)
-    return {"title": data["title"], "body": body}
+    return {"title": data["title"], "body": _append_source(data["body"], article)}
+
+
+def generate_note_article(article: dict) -> dict:
+    """速報版の note 記事を生成し ``{"title", "body"}`` を返す。
+
+    article: ``{"title", "url", "published", "company"}``
+    """
+    return _generate(
+        article, SYSTEM_PROMPT,
+        "以下のAI公式ブログ記事をもとに、note記事（速報）を書いてください。",
+    )
+
+
+def generate_detailed_article(article: dict) -> dict:
+    """詳しい解説版の note 記事を生成し ``{"title", "body"}`` を返す。
+
+    速報より踏み込んだ中ボリューム（1500〜2500字）の読み物。公式記事向け。
+    """
+    return _generate(
+        article, DETAIL_SYSTEM_PROMPT,
+        "以下のAI公式ブログ記事をもとに、詳しい解説記事を書いてください。",
+    )
 
 
 def _append_source(body: str, article: dict) -> str:

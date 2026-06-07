@@ -4,6 +4,8 @@ GAS版と同じスプレッドシートを共有する。「生成記事」シ�
 GAS互換のため順序を変えてはならない。企業名は G 列に追記する。
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from datetime import datetime
@@ -40,11 +42,12 @@ class SheetsClient:
         urls = ws.col_values(1)
         return {u.strip() for u in urls if u.strip()}
 
-    def append_generated(self, source: dict, note: dict) -> None:
-        """「生成記事」シートに追記。A〜F は GAS互換、G に企業名、H に公開日。
+    def append_generated(self, source: dict, note: dict, detail: dict | None = None) -> None:
+        """「生成記事」シートに追記。A〜F は GAS互換、G企業名・H公開日・I/J詳細。
 
         source: ``{"title", "url", "company", "published_str", ...}``
-        note:   ``{"title", "body"}``
+        note:   速報版 ``{"title", "body"}``
+        detail: 詳細版 ``{"title", "body"}`` または None
         """
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ws = self.sh.worksheet(SHEET_GENERATED)
@@ -52,11 +55,13 @@ class SheetsClient:
             now,                          # A 処理日時
             source["title"],              # B 元記事タイトル
             source["url"],                # C 元記事URL
-            note["title"],                # D noteタイトル（生成）
-            note["body"],                 # E note本文（生成）
+            note["title"],                # D noteタイトル（速報）
+            note["body"],                 # E note本文（速報）
             "🏢 公式",                    # F ソース種別（固定）
             source["company"],            # G 企業名（GAS版にはない追加列）
             source.get("published_str", ""),  # H 記事の公開日（YYYY-MM-DD）
+            (detail or {}).get("title", ""),  # I 詳細記事タイトル
+            (detail or {}).get("body", ""),   # J 詳細記事本文
         ]
         ws.append_row(row, value_input_option="USER_ENTERED")
 
