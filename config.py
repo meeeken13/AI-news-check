@@ -15,6 +15,7 @@ SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "")
 # --- 動作パラメータ ---
 MAX_PER_RUN = 10         # 1回の実行でClaude生成する最大記事数
 FRESHNESS_HOURS = 48     # 公開からこの時間以内の記事のみ対象
+SKIP_UNDATED = True      # 公開日を特定できない記事はスキップ（古い記事の混入防止）
 REQUEST_DELAY = 1.5      # サイトへのアクセス間隔（秒）
 GEN_DELAY = 3.0          # Claude生成ごとのスリープ（秒, API負荷対策）
 ARTICLES_PER_SITE = 10   # 各サイトの一覧から取得する最大件数

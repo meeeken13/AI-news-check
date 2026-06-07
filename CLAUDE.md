@@ -34,16 +34,19 @@ python main.py
 
 ## アーキテクチャ
 
-`main.py` が処理フローを統括する: Sheetsから処理済みリスト読込 → ヘッドレスChromium起動 → 各スクレイパー実行 → 鮮度フィルタ＋重複チェック → 新規記事ごとにClaudeで生成 → Sheetsに書き込み。
+`main.py` が処理フローを統括する: Sheetsから処理済みリスト読込 → ヘッドレスChromium起動 → 各スクレイパー実行 → 重複除去 → **各候補に公開日を付与**（`enrich_dates`、ブラウザを開いている間に実行）→ **鮮度フィルタ＋新しい順ソート**（`filter_fresh`）→ 上位 `MAX_PER_RUN` 件をClaudeで生成 → Sheetsに書き込み。
 
-- **`scrapers/base.py`** — `BaseScraper(page)`、抽象メソッド `fetch_articles() -> list[dict]`。1記事の形式は `{"title": str, "url": str, "published": str | None, "company": str}`（`published` は現状どのサイトも取得できず常に None）。収集ヘルパーは2種: **`collect_by_heading`**（h1〜h4見出しを起点にタイトル＋近傍リンクを辿る／カテゴリ・ナビのラベルを拾いにくい）と **`collect_by_href`**（href にパスを含むアンカーを集める／見出しを持たないカード向け、OpenAIで使用）。サイト別サブクラスはどちらか適した方を使う。対象サイトの多くは JS描画なので `goto(url, wait_selector)` で描画完了を待つ。
+鮮度フィルタは `FRESHNESS_HOURS`（既定48h）。公開日を特定できない記事は `SKIP_UNDATED`（既定True）でスキップ＝古い記事の混入を防ぐ。GitHubのcronは約2時間おきに動くため48h窓なら取りこぼさない。
+
+- **`scrapers/base.py`** — `BaseScraper(page)`、抽象メソッド `fetch_articles() -> list[dict]`。1記事の形式は `{"title": str, "url": str, "published": str | None, "company": str}`。収集ヘルパーは2種: **`collect_by_heading`**（h1〜h4見出しを起点にタイトル＋近傍リンクを辿る／カテゴリ・ナビのラベルを拾いにくい）と **`collect_by_href`**（href にパスを含むアンカーを集める／見出しを持たないカード向け、OpenAIで使用）。サイト別サブクラスはどちらか適した方を使う。対象サイトの多くは JS描画なので `goto(url, wait_selector)` で描画完了を待つ（`state="attached"`）。
+- **`dates.py`** — 公開日の取得とパース。`extract_published(page, url)` は記事ページの `meta[article:published_time]` → JSON-LD `datePublished` → `time[datetime]` の順で抜く（OpenAIの`<time>`はJSで遅延描画されるため `wait_for_selector` で待つ）。Anthropicは記事ページに日付が無いため**一覧カードのテキスト**（"May 28, 2026"等）から取得し scraper が `published` に入れる。`parse_published` はISO/英語表記の両方を tz-aware datetime に変換。
 - **`claude_client.py`** — note記事を生成。モデルは `claude-sonnet-4-6`。出力は JSON のみ `{"title": str, "body": str}`。パースは まず `json.loads`、失敗したら正規表現フォールバック。
 - **`sheets_client.py`** — `gspread` ＋ サービスアカウント認証。「処理済み」シートを重複チェック用に読み、「生成記事」「処理済み」に追記する。
 - **`config.py`** — 対象サイト一覧、`MAX_PER_RUN`（1実行の最大記事数, 目安5）、鮮度ウィンドウ（デフォルト48時間）、環境変数の読み込み。
 
 ## 重要な制約（間違えやすい箇所）
 
-- **GASとスプレッドシートを共有している。** 「生成記事」シートは GAS互換のため A〜F列。このシステムは**企業名を G列に追記**する。GASサイドバーは先頭6列しか読まないので G列は安全 — A〜F列の並び替えや列挿入は禁止。重複判定（URL＋タイトル）は GAS版とロジックを揃えること（同じ「処理済み」シートに両者が書くため）。役割分担: GAS版は Google News 系、Python版は公式ブログのみを担当。
+- **GASとスプレッドシートを共有している。** 「生成記事」シートは GAS互換のため A〜F列。このシステムは**G列に企業名・H列に公開日(YYYY-MM-DD)を追記**する。GASサイドバーは先頭6列しか読まないので G/H列は安全 — A〜F列の並び替えや列挿入は禁止。重複判定（URL＋タイトル）は GAS版とロジックを揃えること（同じ「処理済み」シートに両者が書くため）。役割分担: GAS版は Google News 系、Python版は公式ブログのみを担当。
 - **網羅性より頑健性。** 1記事の失敗で全体を止めない — 各記事を try/except で囲む。記事0件のスクレイパーは空リストを返し、**警告ログ**を出す（サイト構造が変わるとセレクタが壊れる。警告が異常検知の手段）。
 - **スクレイピングのマナー。** アクセス間隔を空ける（1〜2秒）、User-Agent を明示、robots.txt を尊重。
 - **言語判定。** 公式ブログは英語が多い。タイトルが ASCII のみなら英語と判定し、Claude に日本語翻訳を明示する — GAS版と同じロジック。

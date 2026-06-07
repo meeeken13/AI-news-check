@@ -86,6 +86,8 @@ def _append_source(body: str, article: dict) -> str:
     既に同じURLが本文に含まれていれば二重に足さない。
     """
     url = article["url"]
+    date = article.get("published_str") or ""
+    label = f"{article['company']}公式" + (f"・{date}" if date else "")
     if url in body:
         return body
-    return f"{body.rstrip()}\n\n---\n📖 元記事（{article['company']}公式）\n{url}"
+    return f"{body.rstrip()}\n\n---\n📖 元記事（{label}）\n{url}"

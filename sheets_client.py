@@ -41,21 +41,22 @@ class SheetsClient:
         return {u.strip() for u in urls if u.strip()}
 
     def append_generated(self, source: dict, note: dict) -> None:
-        """「生成記事」シートに追記。A〜F は GAS互換、G に企業名。
+        """「生成記事」シートに追記。A〜F は GAS互換、G に企業名、H に公開日。
 
-        source: ``{"title", "url", "company", ...}``
+        source: ``{"title", "url", "company", "published_str", ...}``
         note:   ``{"title", "body"}``
         """
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ws = self.sh.worksheet(SHEET_GENERATED)
         row = [
-            now,                # A 処理日時
-            source["title"],    # B 元記事タイトル
-            source["url"],      # C 元記事URL
-            note["title"],      # D noteタイトル（生成）
-            note["body"],       # E note本文（生成）
-            "🏢 公式",          # F ソース種別（固定）
-            source["company"],  # G 企業名（GAS版にはない追加列）
+            now,                          # A 処理日時
+            source["title"],              # B 元記事タイトル
+            source["url"],                # C 元記事URL
+            note["title"],                # D noteタイトル（生成）
+            note["body"],                 # E note本文（生成）
+            "🏢 公式",                    # F ソース種別（固定）
+            source["company"],            # G 企業名（GAS版にはない追加列）
+            source.get("published_str", ""),  # H 記事の公開日（YYYY-MM-DD）
         ]
         ws.append_row(row, value_input_option="USER_ENTERED")
 

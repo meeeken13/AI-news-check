@@ -1,4 +1,4 @@
-"""エントリポイント: スクレイプ → 新規抽出 → Claude生成 → Sheets書込。"""
+"""エントリポイント: スクレイプ → 新規抽出 → 日付付与 → Claude生成 → Sheets書込。"""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from playwright.sync_api import sync_playwright
 
 import config
 from claude_client import generate_note_article
+from dates import extract_published, fmt_date, parse_published
 from sheets_client import SheetsClient
 
 logging.basicConfig(
@@ -25,20 +26,6 @@ def _load_scraper(site: dict, page):
     module = importlib.import_module(f"scrapers.{site['module']}")
     klass = getattr(module, site["klass"])
     return klass(page)
-
-
-def _is_fresh(published: str | None) -> bool:
-    """公開日時が鮮度ウィンドウ内か。取得できない(None)場合は通す。"""
-    if not published:
-        return True
-    try:
-        dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
-    except ValueError:
-        return True  # パースできなければ除外しない
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=config.FRESHNESS_HOURS)
-    return dt >= cutoff
 
 
 def scrape_all(page) -> list[dict]:
@@ -56,6 +43,59 @@ def scrape_all(page) -> list[dict]:
     return collected
 
 
+def dedup(articles: list[dict], processed_urls: set[str]) -> list[dict]:
+    """処理済みURL・実行内重複を除外して新規候補を返す。
+
+    実行内重複はDeepMindのblog.googleクロス投稿がGoogle AIと衝突するため必要。
+    """
+    out: list[dict] = []
+    seen: set[str] = set()
+    for a in articles:
+        if a["url"] in processed_urls or a["url"] in seen:
+            continue
+        seen.add(a["url"])
+        out.append(a)
+    return out
+
+
+def enrich_dates(page, articles: list[dict]) -> None:
+    """各候補に公開日を付与する。
+
+    scraperが既にpublishedを入れていれば（Anthropic）記事ページ取得は省く。
+    結果を ``_dt``（datetime|None）として各dictに格納する。
+    """
+    for a in articles:
+        raw = a.get("published")
+        if not raw:
+            raw = extract_published(page, a["url"])
+            a["published"] = raw
+            time.sleep(config.REQUEST_DELAY)  # アクセス間隔（マナー）
+        a["_dt"] = parse_published(raw)
+
+
+def filter_fresh(articles: list[dict]) -> list[dict]:
+    """鮮度ウィンドウ内の記事のみ残し、新しい順に並べる。
+
+    公開日不明は config.SKIP_UNDATED に従う（既定: スキップ）。
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=config.FRESHNESS_HOURS)
+    fresh: list[dict] = []
+    for a in articles:
+        dt = a.get("_dt")
+        if dt is None:
+            if config.SKIP_UNDATED:
+                logger.warning("公開日不明のためスキップ: %s", a["url"])
+                continue
+            fresh.append(a)
+            continue
+        if dt >= cutoff:
+            fresh.append(a)
+    # 新しい順（日付不明は末尾）
+    fresh.sort(key=lambda x: x.get("_dt") or datetime.min.replace(tzinfo=timezone.utc),
+               reverse=True)
+    return fresh
+
+
 def main() -> None:
     sheets = SheetsClient()
     processed_urls = sheets.fetch_processed_urls()
@@ -66,30 +106,24 @@ def main() -> None:
         page = browser.new_page(user_agent=config.USER_AGENT)
         try:
             articles = scrape_all(page)
+            candidates = dedup(articles, processed_urls)
+            logger.info("新規候補(重複除外後): %d件 / 全%d件", len(candidates), len(articles))
+            enrich_dates(page, candidates)  # 公開日の取得はブラウザを開いている間に
         finally:
             browser.close()
 
-    # 鮮度フィルタ ＋ 重複チェックで新規記事を抽出。
-    # 実行内重複も除外（DeepMindのblog.googleクロス投稿がGoogle AIと衝突しうる）。
-    new_articles: list[dict] = []
-    seen_urls: set[str] = set()
-    for a in articles:
-        if a["url"] in processed_urls or a["url"] in seen_urls:
-            continue
-        if not _is_fresh(a["published"]):
-            continue
-        seen_urls.add(a["url"])
-        new_articles.append(a)
-    logger.info("新規候補: %d件 / 全%d件", len(new_articles), len(articles))
+    targets = filter_fresh(candidates)
+    logger.info("鮮度フィルタ後: %d件（%d時間以内）", len(targets), config.FRESHNESS_HOURS)
 
     processed_count = 0
-    for article in new_articles[: config.MAX_PER_RUN]:
+    for article in targets[: config.MAX_PER_RUN]:
         try:
+            article["published_str"] = fmt_date(article.get("_dt"))
             note = generate_note_article(article)
             sheets.append_generated(article, note)
             sheets.append_processed(article)
             processed_count += 1
-            logger.info("生成・書込完了: %s", note["title"])
+            logger.info("生成・書込完了: [%s] %s", article["published_str"], note["title"])
             time.sleep(config.GEN_DELAY)  # API負荷対策
         except Exception as e:  # noqa: BLE001 - 1記事の失敗で全体を止めない
             logger.warning("記事処理失敗 (%s): %s", article["url"], e)
