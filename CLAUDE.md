@@ -46,8 +46,8 @@ python main.py
 
 ## 重要な制約（間違えやすい箇所）
 
-- **GASとスプレッドシートを共有している。** 「生成記事」シートは GAS互換のため A〜F列。このシステムは**G列=企業名・H列=公開日(YYYY-MM-DD)・I列=詳細タイトル・J列=詳細本文**を追記する。GASサイドバー/WebAppはこれらを読んで速報(D/E)と詳細(I/J)を切替表示する。A〜F列の並び替えや列挿入は禁止。
-- **公式記事は速報＋詳細の2本を生成する。** `claude_client.generate_note_article`(速報, `SYSTEM_PROMPT`)と`generate_detailed_article`(詳しい解説1500〜2500字, `DETAIL_SYSTEM_PROMPT`)を各記事で呼ぶ＝Claude APIは1記事あたり2コール。両方とも本文末尾に出典リンクを付与。重複判定（URL＋タイトル）は GAS版とロジックを揃えること（同じ「処理済み」シートに両者が書くため）。役割分担: GAS版は Google News 系、Python版は公式ブログのみを担当。
+- **GASとスプレッドシートを共有している。** 「生成記事」シートは GAS互換のため A〜F列。このシステムは**G列=企業名・H列=公開日(YYYY-MM-DD)**を追記する。A〜F列の並び替えや列挿入は禁止。
+- **公式記事は速報＋詳細を別々の行として追記する。** `claude_client.generate_note_article`(速報, `SYSTEM_PROMPT`)と`generate_detailed_article`(詳しい解説1500〜2500字, `DETAIL_SYSTEM_PROMPT`)を各記事で呼ぶ＝Claude APIは1記事2コール。`sheets_client.append_generated`が速報行(F=`🏢 公式`)と詳細行(F=`🏢 公式（詳細）`)の2行を追記する。両方とも本文末尾に出典リンク付与。重複チェック用の「処理済み」へはURLを1回だけ記録。重複判定（URL＋タイトル）は GAS版とロジックを揃えること（同じ「処理済み」シートに両者が書くため）。役割分担: GAS版は Google News 系、Python版は公式ブログのみを担当。
 - **網羅性より頑健性。** 1記事の失敗で全体を止めない — 各記事を try/except で囲む。記事0件のスクレイパーは空リストを返し、**警告ログ**を出す（サイト構造が変わるとセレクタが壊れる。警告が異常検知の手段）。
 - **スクレイピングのマナー。** アクセス間隔を空ける（1〜2秒）、User-Agent を明示、robots.txt を尊重。
 - **言語判定。** 公式ブログは英語が多い。タイトルが ASCII のみなら英語と判定し、Claude に日本語翻訳を明示する — GAS版と同じロジック。
