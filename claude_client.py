@@ -90,15 +90,31 @@ def _generate(article: dict, system_prompt: str, instruction: str) -> dict:
         f"元URL: {article['url']}"
     )
 
-    message = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=4096,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
+    last_err: Exception | None = None
+    raw = ""
+    for attempt in range(2):  # 空応答・JSON崩れに備えて1回リトライ
+        message = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        # 先頭ブロックが空の場合に備え、全テキストブロックを結合する
+        raw = "".join(
+            b.text for b in message.content if getattr(b, "type", "") == "text"
+        ).strip()
+        if not raw:
+            last_err = ValueError("Claudeが空のレスポンスを返しました")
+            continue
+        try:
+            data = _parse_json(raw)
+            return {"title": data["title"], "body": _append_source(data["body"], article)}
+        except (json.JSONDecodeError, KeyError) as e:
+            last_err = e  # 次のループでリトライ
+
+    raise RuntimeError(
+        f"記事生成に失敗（2回試行）: {last_err} / 応答先頭={raw[:120]!r}"
     )
-    raw = message.content[0].text.strip()
-    data = _parse_json(raw)
-    return {"title": data["title"], "body": _append_source(data["body"], article)}
 
 
 def generate_note_article(article: dict) -> dict:
