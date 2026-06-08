@@ -89,3 +89,10 @@ class AnthropicNewsScraper(_AnthropicBase):
 class AnthropicEngineeringScraper(_AnthropicBase):
     list_url = "https://www.anthropic.com/engineering"
     article_href = "/engineering/"
+
+
+class AnthropicInstituteScraper(_AnthropicBase):
+    # Anthropic Institute（例: "When AI builds itself"）。記事ページに日付が
+    # 無く一覧カードにも日付が出ないため published は None → 取得日で補完される。
+    list_url = "https://www.anthropic.com/institute"
+    article_href = "/institute/"

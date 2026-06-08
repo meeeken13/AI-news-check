@@ -41,6 +41,7 @@ SITES = [
     {"company": "Microsoft",  "url": "https://news.microsoft.com/source/topics/ai/", "module": "microsoft", "klass": "MicrosoftScraper"},
     {"company": "Anthropic",  "url": "https://www.anthropic.com/news",              "module": "anthropic", "klass": "AnthropicNewsScraper"},
     {"company": "Anthropic",  "url": "https://www.anthropic.com/engineering",       "module": "anthropic", "klass": "AnthropicEngineeringScraper"},
+    {"company": "Anthropic",  "url": "https://www.anthropic.com/institute",         "module": "anthropic", "klass": "AnthropicInstituteScraper"},
     {"company": "OpenAI",     "url": "https://openai.com/news/",                    "module": "openai",    "klass": "OpenAIScraper"},
     {"company": "DeepMind",   "url": "https://deepmind.google/blog/",               "module": "deepmind",  "klass": "DeepMindScraper"},
 ]
