@@ -41,6 +41,7 @@ AI企業の公式発表をもとに、note向けの「詳しい解説記事」�
 
 # 方針
 - 本文は1500〜2500字程度。読み応えのある解説にする。
+- **公式記事の本文が与えられた場合は、その事実に厳密に基づいて書く。**書かれていない数値・固有名詞・主張を推測で創作しない。
 - 公式発表の事実を正確に伝えつつ、なぜ重要か・どういう文脈かを丁寧に補足する。
 - 技術的な内容は具体的なたとえや身近な例で噛み砕く。専門用語は短く補足。
 - 公式文書の丸写しはしない。自分の言葉で再構成する。
@@ -94,19 +95,33 @@ def _parse_response(raw: str) -> dict:
     return {"title": data["title"], "body": data["body"]}
 
 
-def _generate(article: dict, system_prompt: str, instruction: str) -> dict:
-    """指定のシステムプロンプトで記事を生成し ``{"title", "body"}`` を返す。"""
+def _generate(article: dict, system_prompt: str, instruction: str,
+              include_content: bool = False) -> dict:
+    """指定のシステムプロンプトで記事を生成し ``{"title", "body"}`` を返す。
+
+    include_content=True かつ article["content"] があれば、公式記事の本文を
+    プロンプトに含めて、それに基づいて書かせる（詳細記事で使用）。
+    """
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
 
     lang_note = ""
     if _is_english(article["title"]):
         lang_note = "\nこの記事は英語です。必ず日本語に翻訳して記事化してください。"
 
+    content_block = ""
+    if include_content and article.get("content"):
+        content_block = (
+            "\n\n# 公式記事の本文（以下の事実に厳密に基づいて書くこと。"
+            "書かれていないことを推測で補わない）\n"
+            f"{article['content']}"
+        )
+
     user_prompt = (
         f"{instruction}{lang_note}\n\n"
         f"企業: {article['company']}\n"
         f"元タイトル: {article['title']}\n"
         f"元URL: {article['url']}"
+        f"{content_block}"
     )
 
     last_err: Exception | None = None
@@ -155,6 +170,7 @@ def generate_detailed_article(article: dict) -> dict:
     return _generate(
         article, DETAIL_SYSTEM_PROMPT,
         "以下のAI公式ブログ記事をもとに、詳しい解説記事を書いてください。",
+        include_content=True,  # 詳細は公式の実際の本文に基づかせる
     )
 
 

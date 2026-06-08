@@ -11,7 +11,7 @@ from playwright.sync_api import sync_playwright
 
 import config
 from claude_client import generate_detailed_article, generate_note_article
-from dates import extract_published, fmt_date, parse_published
+from dates import extract_content, extract_published, fmt_date, parse_published
 from sheets_client import SheetsClient
 
 logging.basicConfig(
@@ -112,14 +112,17 @@ def main() -> None:
             candidates = dedup(articles, processed_urls)
             logger.info("新規候補(重複除外後): %d件 / 全%d件", len(candidates), len(articles))
             enrich_dates(page, candidates)  # 公開日の取得はブラウザを開いている間に
+            targets = filter_fresh(candidates)[: config.MAX_PER_RUN]
+            logger.info("鮮度フィルタ後: %d件（%d時間以内）", len(targets), config.FRESHNESS_HOURS)
+            # 詳細記事を公式情報に基づかせるため、対象記事の本文を取得（ブラウザを開いている間に）
+            for a in targets:
+                a["content"] = extract_content(page, a["url"])
+                time.sleep(config.REQUEST_DELAY)
         finally:
             browser.close()
 
-    targets = filter_fresh(candidates)
-    logger.info("鮮度フィルタ後: %d件（%d時間以内）", len(targets), config.FRESHNESS_HOURS)
-
     processed_count = 0
-    for article in targets[: config.MAX_PER_RUN]:
+    for article in targets:
         try:
             article["published_str"] = fmt_date(article.get("_dt"))
             note = generate_note_article(article)        # 速報

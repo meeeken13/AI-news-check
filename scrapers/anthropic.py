@@ -1,8 +1,12 @@
 """Anthropic 公式ブログ用スクレイパー（News / Engineering）。
 
-どちらも同じDOM構造のため、一覧URLと記事パスだけ差し替えて共通化する。
-Anthropicの記事ページには公開日が無いため、一覧カードのテキスト
-（例: "May 28, 2026" / "Jun 2, 2026"）から日付を取得する。
+/news には「Announcements（お知らせ）」「Product」「Policy」等のカードが並ぶ。
+見出しタグを使わないカードもあるため、記事リンク(アンカー)起点で全カードを拾う。
+カードのテキストは「カテゴリ」「日付」「タイトル」が混在し順序も一定でないので、
+- 日付: 日付正規表現にマッチする行
+- タイトル: 日付でもカテゴリ名でもない「最初」の行（カードは概ね
+  カテゴリ→日付→タイトル→説明文の順。説明文は後ろなので最初を採る）
+として抽出する（Anthropicの記事ページには公開日が無いためカードから取る）。
 """
 
 import re
@@ -10,33 +14,20 @@ import re
 from config import ARTICLES_PER_SITE
 from scrapers.base import BaseScraper
 
-# カードテキスト内の "May 28, 2026" / "Jun 2, 2026" 形式を拾う
+# "May 28, 2026" / "Jun 2, 2026" / "Feb. 3, 2026" 形式
 _DATE_RE = re.compile(r"[A-Z][a-z]{2,8}\.?\s+\d{1,2},\s+\d{4}")
 
-# 見出し→記事リンク＋カード全文を返すJS（カード全文から日付を抽出するため）
-_CARD_JS = """
-(pat) => {
-  const out = [];
-  for (const h of document.querySelectorAll('h1,h2,h3,h4')) {
-    const title = (h.innerText || '').trim().split('\\n')[0].trim();
-    if (!title || title.length < 10) continue;
-    let a = h.closest('a');
-    if (!a) {
-      let el = h;
-      for (let i = 0; i < 5 && el; i++) {
-        const f = el.querySelector ? el.querySelector('a[href]') : null;
-        if (f) { a = f; break; }
-        el = el.parentElement;
-      }
-    }
-    if (!a) continue;
-    const href = a.getAttribute('href') || '';
-    if (!href.includes(pat)) continue;
-    const card = a.closest('a') || a;
-    out.push({ title, href, text: (card.innerText || '') });
-  }
-  return out;
+# タイトルと紛らわしいカテゴリ名（タイトル抽出時に除外）
+_CATEGORIES = {
+    "announcements", "announcement", "product", "policy", "research",
+    "societal impacts", "interpretability", "engineering", "company",
+    "education", "alignment", "featured",
 }
+
+# 記事リンク(アンカー)の href とカード全文を返すJS
+_CARD_JS = """
+(pat) => Array.from(document.querySelectorAll(`a[href*="${pat}"]`))
+  .map(a => ({ href: a.getAttribute('href') || '', text: a.innerText || '' }));
 """
 
 
@@ -58,12 +49,31 @@ class _AnthropicBase(BaseScraper):
             url = self.absolute_url(item["href"])
             if url.rstrip("/") == exclude or url in seen:
                 continue
+            lines = [ln.strip() for ln in item["text"].split("\n") if ln.strip()]
+            if not lines:
+                continue
+            # 日付行
+            date = None
+            for ln in lines:
+                m = _DATE_RE.search(ln)
+                if m:
+                    date = m.group(0)
+                    break
+            # タイトル候補: 日付でもカテゴリ名でもない行。説明文は後ろに来るので最初を採る。
+            cands = [
+                ln for ln in lines
+                if not _DATE_RE.search(ln) and ln.lower() not in _CATEGORIES
+            ]
+            if not cands:
+                continue
+            title = cands[0]
+            if len(title) < 10:
+                continue
             seen.add(url)
-            m = _DATE_RE.search(item["text"])
             results.append({
-                "title": item["title"],
+                "title": title,
                 "url": url,
-                "published": m.group(0) if m else None,
+                "published": date,
                 "company": self.company,
             })
             if len(results) >= ARTICLES_PER_SITE:

@@ -81,3 +81,27 @@ def parse_published(raw: str | None) -> datetime | None:
 def fmt_date(dt: datetime | None) -> str:
     """表示用に YYYY-MM-DD へ整形（None は空文字）。"""
     return dt.strftime("%Y-%m-%d") if dt else ""
+
+
+# 本文抽出用JS。記事本体らしき要素のテキストを返す。
+_CONTENT_JS = """() => {
+  const el = document.querySelector('article')
+          || document.querySelector('main')
+          || document.body;
+  return el ? el.innerText : '';
+}"""
+
+
+def extract_content(page, url: str, max_chars: int = 6000) -> str:
+    """記事ページの本文テキストを返す（詳細記事を公式情報に基づかせるため）。
+
+    既にそのURLを開いていれば再遷移しない。先頭 max_chars 文字に切り詰める。
+    """
+    try:
+        if page.url.rstrip("/") != url.rstrip("/"):
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(1200)  # JS描画の猶予
+        text = page.evaluate(_CONTENT_JS) or ""
+        return text.strip()[:max_chars]
+    except Exception:
+        return ""
