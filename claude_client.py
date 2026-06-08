@@ -131,6 +131,8 @@ def _append_source(body: str, article: dict) -> str:
     """
     url = article["url"]
     date = article.get("published_str") or ""
+    if date and article.get("date_estimated"):
+        date += "（推定）"  # 公開日が取れず取得日で補完したもの
     label = f"{article['company']}公式" + (f"・{date}" if date else "")
     if url in body:
         return body

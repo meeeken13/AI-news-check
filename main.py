@@ -70,23 +70,26 @@ def enrich_dates(page, articles: list[dict]) -> None:
             raw = extract_published(page, a["url"])
             a["published"] = raw
             time.sleep(config.REQUEST_DELAY)  # アクセス間隔（マナー）
-        a["_dt"] = parse_published(raw)
+        dt = parse_published(raw)
+        if dt is None and config.UNDATED_FALLBACK_TODAY:
+            # 公開日が取れない記事は取得日(実行日)で補完し取りこぼさない。推定印を付ける。
+            dt = datetime.now(timezone.utc)
+            a["date_estimated"] = True
+        a["_dt"] = dt
 
 
 def filter_fresh(articles: list[dict]) -> list[dict]:
     """鮮度ウィンドウ内の記事のみ残し、新しい順に並べる。
 
-    公開日不明は config.SKIP_UNDATED に従う（既定: スキップ）。
+    公開日不明は enrich_dates 側で取得日に補完済み（UNDATED_FALLBACK_TODAY=True時）。
+    補完しない設定では _dt が None のままなのでスキップする。
     """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=config.FRESHNESS_HOURS)
     fresh: list[dict] = []
     for a in articles:
         dt = a.get("_dt")
         if dt is None:
-            if config.SKIP_UNDATED:
-                logger.warning("公開日不明のためスキップ: %s", a["url"])
-                continue
-            fresh.append(a)
+            logger.warning("公開日不明のためスキップ: %s", a["url"])
             continue
         if dt >= cutoff:
             fresh.append(a)
