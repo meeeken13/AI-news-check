@@ -28,8 +28,11 @@ AI企業の公式発表をもとに、note向けの日本語記事を書きま�
 5. ハッシュタグ5つ（#で始める）
 
 # 出力形式
-必ず次のJSONのみを出力する。前後に説明文やコードブロック記号を付けない。
-{"title": "記事タイトル", "body": "リード文から始まる記事本文全体"}"""
+次の形式で出力する。前後に説明やコードブロック記号は付けない。
+[[[TITLE]]]
+記事タイトル
+[[[BODY]]]
+リード文から始まる記事本文全体"""
 
 # 詳細解説版（速報より踏み込んだ中ボリュームの記事）
 DETAIL_SYSTEM_PROMPT = """あなたはAI・テクノロジー分野の専門ライター兼ブロガーです。
@@ -55,8 +58,11 @@ AI企業の公式発表をもとに、note向けの「詳しい解説記事」�
 8. ハッシュタグ5つ（#で始める）
 
 # 出力形式
-必ず次のJSONのみを出力する。前後に説明文やコードブロック記号を付けない。
-{"title": "記事タイトル", "body": "リード文から始まる記事本文全体"}"""
+次の形式で出力する。前後に説明やコードブロック記号は付けない。
+[[[TITLE]]]
+記事タイトル
+[[[BODY]]]
+リード文から始まる記事本文全体"""
 
 
 def _is_english(text: str) -> bool:
@@ -64,15 +70,28 @@ def _is_english(text: str) -> bool:
     return text.isascii()
 
 
-def _parse_json(raw: str) -> dict:
-    """まず json.loads、失敗したら正規表現で {...} を抽出するフォールバック。"""
+def _parse_response(raw: str) -> dict:
+    """応答から ``{"title", "body"}`` を取り出す。
+
+    マーカー区切り（[[[TITLE]]] / [[[BODY]]]）を優先。長文markdownの
+    エスケープ崩れに強い。旧JSON形式や混在にも備えてJSONフォールバックも持つ。
+    """
+    if "[[[BODY]]]" in raw:
+        head, body = raw.split("[[[BODY]]]", 1)
+        title = head.replace("[[[TITLE]]]", "").strip()
+        body = body.strip()
+        if title and body:
+            return {"title": title, "body": body}
+
+    # JSONフォールバック（まず素直に、ダメなら {...} を抽出）
     try:
-        return json.loads(raw)
+        data = json.loads(raw)
     except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if not match:
             raise
-        return json.loads(match.group(0))
+        data = json.loads(match.group(0))
+    return {"title": data["title"], "body": data["body"]}
 
 
 def _generate(article: dict, system_prompt: str, instruction: str) -> dict:
@@ -107,9 +126,9 @@ def _generate(article: dict, system_prompt: str, instruction: str) -> dict:
             last_err = ValueError("Claudeが空のレスポンスを返しました")
             continue
         try:
-            data = _parse_json(raw)
+            data = _parse_response(raw)
             return {"title": data["title"], "body": _append_source(data["body"], article)}
-        except (json.JSONDecodeError, KeyError) as e:
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
             last_err = e  # 次のループでリトライ
 
     raise RuntimeError(

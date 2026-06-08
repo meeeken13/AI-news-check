@@ -40,7 +40,7 @@ python main.py
 
 - **`scrapers/base.py`** — `BaseScraper(page)`、抽象メソッド `fetch_articles() -> list[dict]`。1記事の形式は `{"title": str, "url": str, "published": str | None, "company": str}`。収集ヘルパーは2種: **`collect_by_heading`**（h1〜h4見出しを起点にタイトル＋近傍リンクを辿る／カテゴリ・ナビのラベルを拾いにくい）と **`collect_by_href`**（href にパスを含むアンカーを集める／見出しを持たないカード向け、OpenAIで使用）。サイト別サブクラスはどちらか適した方を使う。対象サイトの多くは JS描画なので `goto(url, wait_selector)` で描画完了を待つ（`state="attached"`）。
 - **`dates.py`** — 公開日の取得とパース。`extract_published(page, url)` は記事ページの `meta[article:published_time]` → JSON-LD `datePublished` → `time[datetime]` の順で抜く（OpenAIの`<time>`はJSで遅延描画されるため `wait_for_selector` で待つ）。Anthropicは記事ページに日付が無いため**一覧カードのテキスト**（"May 28, 2026"等）から取得し scraper が `published` に入れる。`parse_published` はISO/英語表記の両方を tz-aware datetime に変換。
-- **`claude_client.py`** — note記事を生成。モデルは `claude-sonnet-4-6`。出力は JSON のみ `{"title": str, "body": str}`。パースは まず `json.loads`、失敗したら正規表現フォールバック。
+- **`claude_client.py`** — note記事を生成。モデルは `claude-sonnet-4-6`。出力は**マーカー区切り**（`[[[TITLE]]]` / `[[[BODY]]]`）— 長文markdownのJSONエスケープ崩れを避けるため。`_parse_response`がマーカー優先＋JSONフォールバックで解析。空応答/解析失敗時は1回リトライ（`_generate`）。
 - **`sheets_client.py`** — `gspread` ＋ サービスアカウント認証。「処理済み」シートを重複チェック用に読み、「生成記事」「処理済み」に追記する。
 - **`config.py`** — 対象サイト一覧、`MAX_PER_RUN`（1実行の最大記事数, 目安5）、鮮度ウィンドウ（デフォルト48時間）、環境変数の読み込み。
 
