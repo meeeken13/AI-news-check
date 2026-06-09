@@ -92,16 +92,16 @@ _CONTENT_JS = """() => {
 }"""
 
 
-def extract_content(page, url: str, max_chars: int = 6000) -> str:
+def extract_content(page, url: str) -> str:
     """記事ページの本文テキストを返す（詳細記事を公式情報に基づかせるため）。
 
-    既にそのURLを開いていれば再遷移しない。先頭 max_chars 文字に切り詰める。
+    既にそのURLを開いていれば再遷移しない。全文を返す（切り詰めない）。
     """
     try:
         if page.url.rstrip("/") != url.rstrip("/"):
             page.goto(url, wait_until="domcontentloaded", timeout=30000)
             page.wait_for_timeout(1200)  # JS描画の猶予
         text = page.evaluate(_CONTENT_JS) or ""
-        return text.strip()[:max_chars]
+        return text.strip()
     except Exception:
         return ""

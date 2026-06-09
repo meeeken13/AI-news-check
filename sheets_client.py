@@ -42,16 +42,13 @@ class SheetsClient:
         urls = ws.col_values(1)
         return {u.strip() for u in urls if u.strip()}
 
-    def append_generated(self, source: dict, note: dict, detail: dict | None = None) -> None:
-        """「生成記事」シートに追記。速報と詳細は別々の行として追記する。
+    def append_generated(self, source: dict, detail: dict) -> None:
+        """「生成記事」シートに追記。
 
         source: ``{"title", "url", "company", "published_str", ...}``
-        note:   速報版 ``{"title", "body"}``
-        detail: 詳細版 ``{"title", "body"}`` または None
+        detail: ``{"title", "body"}``
         """
-        self._append_row(source, note["title"], note["body"], "🏢 公式")
-        if detail:
-            self._append_row(source, detail["title"], detail["body"], "🏢 公式（詳細）")
+        self._append_row(source, detail["title"], detail["body"], "🏢 公式")
 
     def _append_row(self, source: dict, title: str, body: str, label: str) -> None:
         """「生成記事」シートに1行追記。A〜F は GAS互換、G企業名・H公開日。"""

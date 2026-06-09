@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from playwright.sync_api import sync_playwright
 
 import config
-from claude_client import generate_detailed_article, generate_note_article
+from claude_client import generate_detailed_article
 from dates import extract_content, extract_published, fmt_date, parse_published
 from sheets_client import SheetsClient
 
@@ -125,12 +125,11 @@ def main() -> None:
     for article in targets:
         try:
             article["published_str"] = fmt_date(article.get("_dt"))
-            note = generate_note_article(article)        # 速報
-            detail = generate_detailed_article(article)  # 詳しい解説（公式記事）
-            sheets.append_generated(article, note, detail)
+            detail = generate_detailed_article(article)
+            sheets.append_generated(article, detail)
             sheets.append_processed(article)
             processed_count += 1
-            logger.info("生成・書込完了: [%s] %s（速報＋詳細）", article["published_str"], note["title"])
+            logger.info("生成・書込完了: [%s] %s", article["published_str"], detail["title"])
             time.sleep(config.GEN_DELAY)  # API負荷対策
         except Exception as e:  # noqa: BLE001 - 1記事の失敗で全体を止めない
             logger.warning("記事処理失敗 (%s): %s", article["url"], e)
