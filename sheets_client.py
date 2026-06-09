@@ -64,7 +64,7 @@ class SheetsClient:
             source["company"],            # G 企業名
             source.get("published_str", ""),  # H 記事の公開日（YYYY-MM-DD）
         ]
-        ws.append_row(row, value_input_option="USER_ENTERED")
+        ws.append_row(row, value_input_option="USER_ENTERED", table_range="A1")
 
     def append_processed(self, source: dict) -> None:
         """「処理済み」シートに追記（A:URL / B:タイトル / C:処理日時）。"""
@@ -73,4 +73,5 @@ class SheetsClient:
         ws.append_row(
             [source["url"], source["title"], now],
             value_input_option="USER_ENTERED",
+            table_range="A1",
         )
